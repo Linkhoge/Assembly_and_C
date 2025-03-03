@@ -1,3 +1,10 @@
+*-----------------------------------------------------------
+* Title      : House Builder
+* Written by : Ariel Fajimiyo
+* Date       : 28/02/25
+* Description: Assembly Game for my Final Project. Involves simple math operations for buying and creating houses.
+*-----------------------------------------------------------
+
 *-------------------------------------------------------
 * STARTING MEMORY ADDRESS FOR THE PROGRAMME $1000
 *-------------------------------------------------------
