@@ -9,24 +9,6 @@
 * STARTING MEMORY ADDRESS FOR THE PROGRAMME $1000
 *-------------------------------------------------------
 	ORG $1000
-*-------------------------------------------------------
-*CHOOSE TO BE A MINI KNIGHT OR A TINY EXPLORER
-*-------------------------------------------------------
-
-*-------------------------------------------------------
-*VALIDATION VALUES TO BE USED, MODIFY AS NEEDED
-*-------------------------------------------------------
-EXIT		EQU 0			;USED TO EXIT ASSEMBLY PROGRAM
-
-DAILY_PAYMENT   EQU 20   ; BUCKS EARNED WHEN SKIPPING TO NEXT DAY
-TARGET_BUCKS    EQU 500     ; TARGET AMOUNT OF BUCKS TO WIN THE GAME
-GATHER_BUCKS_COST   EQU 20   ; BUCKS REQUIRED TO GATHER RESOURCES
-DETACHED_BUCKS_COST EQU 30   ; BUCKS REQUIRED TO BUILD A DETACHED HOUSE
-APARTMENT_BUCKS_COST EQU 50  ; BUCKS REQUIRED TO BUILD AN APARTMENT
-BUILDING_BUCKS_COST EQU 100  ; BUCKS REQUIRED TO BUILD A BUILDING
-MANSION_BUCKS_COST  EQU 200  ; BUCKS REQUIRED TO BUILD A MANSION
-DANGER_LOC  EQU 100         ;USED FOR SIMPLE COLLISION DETECTION
-                            ;* EXAMPLE FOR A HIT (GIANT FOOTSTEP)
 
 *START OF GAME
 START:
@@ -35,6 +17,10 @@ START:
 
     ; INITIALIZE VARIABLES
     MOVE.W  #0,HOUSES       ; INITIALIZE HOUSES BUILT TO 0
+    MOVE.W  #0,DETACHED_HOUSES       ; ^
+    MOVE.W  #0,APARTMENT_HOUSES      ; ^
+    MOVE.W  #0,BUILDING_HOUSES       ; ^
+    MOVE.W  #0,MANSION_HOUSES        ; ^
     MOVE.W  #100,BUCKS      ; INITIALIZE BUCKS TO 100
     MOVE.W  #0,PROFIT       ; INITIALIZE PROFIT TO 0
     MOVE.W  #0,WOOD         ; INITIALIZE WOOD TO 0
@@ -79,24 +65,29 @@ INPUT:
 *----------------GAMELOOP (MAIN LOOP)-------------------
 *------------------------------------------------------- 
 GAMELOOP:
-    BSR     INPUT           ;BRANCH TO INPUT SUBROUTINE
-    BSR     UPDATE          ;BRANCH TO UPDATE GAME SUBROUTINE 
-    ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN 
-    BSR     DRAW            ;BRANCH TO DRAW GAME SUBROUTINE           
-    ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN 
-    BSR     GAMEPLAY        ;BRANCH TO GAMEPLAY SUBROUTINE
-    ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN        
-    ;BSR     HUD             ;BRANCH TO HUD SUBROUTINE
-    ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN
-    
-    BSR     REPLAY          ;BRANCH TO REPLAY SUBROUTINE 
-    BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN
-    RTS                     ;RETURN FROM GAMELOOP: SUBROUTINE       
+    ; CHECK IF BUCKS == 0 AT THE START OF THE LOOP
+    MOVE.W  BUCKS,D1        ; LOAD BUCKS INTO D1
+    CMP.W   #0,D1           ; ARE BUCKS EQUAL TO 0?
+    BEQ     LOSE_GAME       ; IF BUCKS == 0, BRANCH TO LOSE_GAME
 
-*-------------------------------------------------------
+    BSR     INPUT           ; BRANCH TO INPUT SUBROUTINE
+    BSR     UPDATE          ; BRANCH TO UPDATE GAME SUBROUTINE 
+    ;BSR     CLEAR_SCREEN    ; CLEARS THE SCREEN 
+    BSR     DRAW            ; BRANCH TO DRAW GAME SUBROUTINE           
+    ;BSR     CLEAR_SCREEN    ; CLEARS THE SCREEN 
+    BSR     GAMEPLAY        ; BRANCH TO GAMEPLAY SUBROUTINE
+    ;BSR     CLEAR_SCREEN    ; CLEARS THE SCREEN        
+    ;BSR     HUD             ; BRANCH TO HUD SUBROUTINE
+    ;BSR     CLEAR_SCREEN    ; CLEARS THE SCREEN
+    
+    BSR     REPLAY          ; BRANCH TO REPLAY SUBROUTINE 
+    BSR     CLEAR_SCREEN    ; CLEARS THE SCREEN
+    RTS                     ; RETURN FROM GAMELOOP: SUBROUTINE     
+
+*-----------------------------------------------------------
 *----------------UPDATE QUEST PROGRESS------------------
 *  COMPLETE QUEST
-*------------------------------------------------------- 
+*-----------------------------------------------------------
 UPDATE:
     MOVEM.L D0-D1/A1,-(A7)  ; SAVE REGISTERS TO STACK
     BSR     ENDL            ; BRANCH TO ENDL SUBROUTINE
@@ -115,28 +106,32 @@ UPDATE:
     BSR     SKIP_TO_NEXT_DAY ; ADVANCE TO NEXT DAY AND REPLENISH ENERGY
 
 SKIP_ENERGY_CHECK:
+    ; CHECK NEW WIN CONDITION (HOUSES >= 5)
+    MOVE.W  HOUSES,D1       ; LOAD TOTAL HOUSES INTO D1
+    CMP.W   #5,D1           ; DID PLAYER BUILD 5 HOUSES?
+    BGE     WIN_GAME_HOUSES ; IF HOUSES >= 5, WIN
+
     ; CHECK WIN CONDITION (BUCKS >= TARGET_BUCKS)
     MOVE.W  BUCKS,D1        ; LOAD BUCKS INTO D1
     CMP.W   #TARGET_BUCKS,D1 ; DID PLAYER REACH TARGET BUCKS?
-    BLT     CHECK_LOSE       ; IF BUCKS < TARGET_BUCKS, CHECK LOSE
-    BSR     WIN_GAME         ; IF BUCKS >= TARGET_BUCKS, WIN
+    BLT     CHECK_LOSE      ; IF BUCKS < TARGET_BUCKS, CHECK LOSE
+    BSR     WIN_GAME        ; IF BUCKS >= TARGET_BUCKS, WIN
 
 CHECK_LOSE:
     ; CHECK LOSE CONDITION (BUCKS <= 0)
     MOVE.W  BUCKS,D1         ; LOAD BUCKS INTO D1 AGAIN
     CMP.W   #0,D1            ; ARE BUCKS 0 OR LESS?
-    BGT     UPDATE_END       ; IF BUCKS > 0, CONTINUE GAME
-    BSR     LOSE_GAME        ; IF BUCKS <= 0, LOSE
+    BLE     LOSE_GAME       ; IF BUCKS <= 0, LOSE (CHANGED FROM BGT TO BLE)
 
 UPDATE_END:
     MOVEM.L (A7)+,D0-D1/A1  ; RESTORE REGISTERS
     BSR     DECORATE        ; BRANCH TO DECORATE SUBROUTINE
     RTS  
 
-*-------------------------------------------------------
+*-----------------------------------------------------------
 * WIN/LOSE SUBROUTINE
 * HANDLES THE WIN AND LOSS
-*-------------------------------------------------------
+*-----------------------------------------------------------
 WIN_GAME:
     BSR     ENDL
     BSR     DECORATE
@@ -149,6 +144,25 @@ WIN_GAME:
     TRAP    #15
 
     LEA     WIN_BUCKS_MSG,A1    ; DISPLAY " bucks in "
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    MOVE.W  DAY,D1              ; DISPLAY DAYS (SCORE)
+    MOVE.B  #3,D0
+    TRAP    #15
+
+    LEA     WIN_DAYS_MSG,A1     ; DISPLAY " days! The fewer days, the better your score!"
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    BSR     DECORATE
+    SIMHALT                     ; END THE GAME
+
+* NEW WIN CONDITION FOR 5 HOUSES
+WIN_GAME_HOUSES:
+    BSR     ENDL
+    BSR     DECORATE
+    LEA     WIN_HOUSES_MSG,A1   ; DISPLAY "CONGRATULATIONS! You built 5 houses in "
     MOVE.B  #14,D0
     TRAP    #15
 
@@ -198,10 +212,10 @@ DRAW:
 *-------------------------------------------------------
 *---GAME PLAY (QUEST PROGRESS)--------------------------
 *------------------------------------------------------- 
-*-------------------------------------------------------
+*-----------------------------------------------------------
 * GAMEPLAY SUBROUTINE
 * HANDLES THE MAIN GAME LOOP AND MENU OPTIONS
-*-------------------------------------------------------
+*-----------------------------------------------------------
 GAMEPLAY:
     BSR     ENDL            ; NEW LINE
     BSR     DECORATE        ; DECORATE THE SCREEN
@@ -210,7 +224,7 @@ GAMEPLAY:
     TRAP    #15
 
 GAMEPLAY_MENU:
-    BSR HUD
+    BSR     HUD
     BSR     DECORATE        ; DECORATE THE SCREEN
     LEA     GAMEPLAY_MENU_MSG,A1 ; LOAD GAMEPLAY MENU MESSAGE
     MOVE.B  #14,D0          ; DISPLAY STRING
@@ -222,7 +236,7 @@ GAMEPLAY_MENU:
 
     ; CHECK FOR DEV MODE (666)
     CMP.W   #666,D1         ; CHECK IF INPUT IS 666
-    ; BEQ     DEV_MODE        ; IF YES, BRANCH TO DEV MODE
+    BEQ     DEV_MODE        ; IF YES, BRANCH TO DEV MODE
 
     ; VALIDATE NORMAL INPUT (1-6)
     CMP.B   #1,D1           ; CHECK IF PLAYER CHOSE 1 (GATHER RESOURCES)
@@ -262,7 +276,7 @@ OPTION_2:
 * OPTION 3: SELL HOUSE
 *-------------------------------------------------------
 OPTION_3:
-    BSR     SELL_HOUSE      ; BRANCH TO SELL_HOUSE SUBROUTINE
+    BSR     SELL_HOUSE_MENU      ; BRANCH TO SELL_HOUSE SUBROUTINE
     BSR     PRESS_CONTINUE  ; RETURN TO MAIN MENU
 
 *-------------------------------------------------------
@@ -320,6 +334,172 @@ BUILD_HOUSE_MENU:
     MOVE.B  #14,D0          ; DISPLAY STRING
     TRAP    #15
     BRA     BUILD_HOUSE_MENU ; LOOP BACK TO DISPLAY MENU AGAIN
+
+*-------------------------------------------------------
+* SELL_HOUSE_MENU SUBROUTINE
+* DISPLAYS A SUBMENU FOR SELLING DIFFERENT TYPES OF HOUSES
+*-------------------------------------------------------
+SELL_HOUSE_MENU:
+    BSR     ENDL            ; NEW LINE
+    BSR     DECORATE        ; DECORATE THE SCREEN
+    LEA     SELL_HOUSE_MENU_MSG,A1 ; LOAD SELL HOUSE MENU MESSAGE
+    MOVE.B  #14,D0          ; DISPLAY STRING
+    TRAP    #15
+
+    ; READ PLAYER INPUT
+    MOVE.B  #4,D0           ; READ PLAYER INPUT
+    TRAP    #15             ; WAIT FOR KEY PRESS
+
+    ; VALIDATE INPUT
+    CMP.B   #1,D1           ; CHECK IF PLAYER CHOSE 1 (DETACHED)
+    BEQ     SELL_DETACHED   ; BRANCH TO SELL_DETACHED HANDLER
+    CMP.B   #2,D1           ; CHECK IF PLAYER CHOSE 2 (APARTMENT)
+    BEQ     SELL_APARTMENT  ; BRANCH TO SELL_APARTMENT HANDLER
+    CMP.B   #3,D1           ; CHECK IF PLAYER CHOSE 3 (BUILDING)
+    BEQ     SELL_BUILDING   ; BRANCH TO SELL_BUILDING HANDLER
+    CMP.B   #4,D1           ; CHECK IF PLAYER CHOSE 4 (MANSION)
+    BEQ     SELL_MANSION    ; BRANCH TO SELL_MANSION HANDLER
+    CMP.B   #5,D1           ; CHECK IF PLAYER CHOSE 5 (BACK TO MAIN MENU)
+    BEQ     BACK_TO_MAIN    ; BRANCH BACK TO MAIN MENU
+
+    ; INVALID INPUT, LOOP BACK
+    LEA     INVALID_INPUT_MSG,A1 ; LOAD INVALID INPUT MESSAGE
+    MOVE.B  #14,D0          ; DISPLAY STRING
+    TRAP    #15
+    BRA     SELL_HOUSE_MENU ; LOOP BACK TO DISPLAY MENU AGAIN
+
+*-------------------------------------------------------
+* SELL_DETACHED SUBROUTINE
+* SELLS A DETACHED HOUSE AT HARDCODED PRICE
+*-------------------------------------------------------
+SELL_DETACHED:
+    CMP.W   #1,DETACHED_HOUSES ; CHECK IF PLAYER HAS AT LEAST 1 DETACHED HOUSE
+    BLT     NO_HOUSES_TO_SELL  ; IF NOT, DISPLAY ERROR
+
+    BSR     ENDL
+    LEA     SCANNING_MSG,A1    ; DISPLAY "Scanning for offers..."
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    ; AUTOMATIC SALE AT HARDCODED PRICE
+    SUB.W   #1,DETACHED_HOUSES ; DECREMENT DETACHED HOUSE COUNT
+    SUB.W   #1,HOUSES          ; DECREMENT TOTAL HOUSES (OPTIONAL)
+    MOVE.W  #DETACHED_SELL_PRICE,D2 ; HARDCODED PRICE (45)
+    ADD.W   D2,BUCKS           ; ADD SELL PRICE TO BUCKS
+    SUB.W   #DETACHED_BUCKS_COST,D2 ; CALCULATE PROFIT (45 - 30 = 15)
+    ADD.W   D2,PROFIT          ; ADD PROFIT TO TOTAL
+    LEA     DETACHED_SOLD_MSG,A1 ; LOAD SUCCESS MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE     ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* SELL_APARTMENT SUBROUTINE
+* SELLS AN APARTMENT AT HARDCODED PRICE
+*-------------------------------------------------------
+SELL_APARTMENT:
+    CMP.W   #1,APARTMENT_HOUSES ; CHECK IF PLAYER HAS AT LEAST 1 APARTMENT
+    BLT     NO_HOUSES_TO_SELL   ; IF NOT, DISPLAY ERROR
+
+    BSR     ENDL
+    LEA     SCANNING_MSG,A1    ; DISPLAY "Scanning for offers..."
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    ; AUTOMATIC SALE AT HARDCODED PRICE
+    SUB.W   #1,APARTMENT_HOUSES ; DECREMENT APARTMENT COUNT
+    SUB.W   #1,HOUSES           ; DECREMENT TOTAL HOUSES (OPTIONAL)
+    MOVE.W  #APARTMENT_SELL_PRICE,D2 ; HARDCODED PRICE (75)
+    ADD.W   D2,BUCKS            ; ADD SELL PRICE TO BUCKS
+    SUB.W   #APARTMENT_BUCKS_COST,D2 ; CALCULATE PROFIT (75 - 50 = 25)
+    ADD.W   D2,PROFIT           ; ADD PROFIT TO TOTAL
+    LEA     APARTMENT_SOLD_MSG,A1 ; LOAD SUCCESS MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE      ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* SELL_BUILDING SUBROUTINE
+* SELLS A BUILDING AT HARDCODED PRICE
+*-------------------------------------------------------
+SELL_BUILDING:
+    CMP.W   #1,BUILDING_HOUSES ; CHECK IF PLAYER HAS AT LEAST 1 BUILDING
+    BLT     NO_HOUSES_TO_SELL  ; IF NOT, DISPLAY ERROR
+
+    BSR     ENDL
+    LEA     SCANNING_MSG,A1    ; DISPLAY "Scanning for offers..."
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    ; AUTOMATIC SALE AT HARDCODED PRICE
+    SUB.W   #1,BUILDING_HOUSES ; DECREMENT BUILDING COUNT
+    SUB.W   #1,HOUSES          ; DECREMENT TOTAL HOUSES (OPTIONAL)
+    MOVE.W  #BUILDING_SELL_PRICE,D2 ; HARDCODED PRICE (150)
+    ADD.W   D2,BUCKS           ; ADD SELL PRICE TO BUCKS
+    SUB.W   #BUILDING_BUCKS_COST,D2 ; CALCULATE PROFIT (150 - 100 = 50)
+    ADD.W   D2,PROFIT          ; ADD PROFIT TO TOTAL
+    LEA     BUILDING_SOLD_MSG,A1 ; LOAD SUCCESS MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE     ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* SELL_MANSION SUBROUTINE
+* SELLS A MANSION AT HARDCODED PRICE
+*-------------------------------------------------------
+SELL_MANSION:
+    CMP.W   #1,MANSION_HOUSES ; CHECK IF PLAYER HAS AT LEAST 1 MANSION
+    BLT     NO_HOUSES_TO_SELL ; IF NOT, DISPLAY ERROR
+
+    BSR     ENDL
+    LEA     SCANNING_MSG,A1    ; DISPLAY "Scanning for offers..."
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    ; AUTOMATIC SALE AT HARDCODED PRICE
+    SUB.W   #1,MANSION_HOUSES ; DECREMENT MANSION COUNT
+    SUB.W   #1,HOUSES         ; DECREMENT TOTAL HOUSES (OPTIONAL)
+    MOVE.W  #MANSION_SELL_PRICE,D2 ; HARDCODED PRICE (300)
+    ADD.W   D2,BUCKS          ; ADD SELL PRICE TO BUCKS
+    SUB.W   #MANSION_BUCKS_COST,D2 ; CALCULATE PROFIT (300 - 200 = 100)
+    ADD.W   D2,PROFIT         ; ADD PROFIT TO TOTAL
+    LEA     MANSION_SOLD_MSG,A1 ; LOAD SUCCESS MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE    ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* REJECT_OFFER SUBROUTINE
+* HANDLES OFFER REJECTION
+*-------------------------------------------------------
+REJECT_OFFER:
+    LEA     OFFER_REJECTED_MSG,A1 ; LOAD REJECTION MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE        ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* NO_HOUSES_TO_SELL SUBROUTINE
+* DISPLAYS ERROR IF NO HOUSES OF THAT TYPE ARE AVAILABLE
+*-------------------------------------------------------
+NO_HOUSES_TO_SELL:
+    LEA     NO_HOUSES_MSG,A1 ; LOAD NO HOUSES MESSAGE
+    MOVE.B  #14,D0          ; DISPLAY STRING
+    TRAP    #15
+    BSR     PRESS_CONTINUE  ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
+*-------------------------------------------------------
+* BACK_TO_MAIN SUBROUTINE
+* RETURNS TO THE MAIN MENU
+*-------------------------------------------------------
+BACK_TO_MAIN:
+    RTS                     ; RETURN TO MAIN MENU
 
 *-------------------------------------------------------
 * SKIP_TO_NEXT_DAY SUBROUTINE
@@ -389,6 +569,7 @@ CHECK_WOOD_DETACHED:
 
     ; INCREMENT HOUSES BUILT
     ADD.W   #1,HOUSES       ; ADD 1 HOUSE
+    ADD.W #1, DETACHED_HOUSES ; ADD 1 DETACHED
 
     ; DISPLAY HOUSE ART
     LEA     HOUSE_ART,A1    ; LOAD HOUSE ART ADDRESS
@@ -433,6 +614,7 @@ CHECK_WOOD_APARTMENT:
 
     ; INCREMENT HOUSES BUILT
     ADD.W   #1,HOUSES       ; ADD 1 HOUSE
+    ADD.W #1, APARTMENT_HOUSES ; ADD 1 APARTMENT
 
     ; DISPLAY APARTMENT ART
     LEA     APARTMENT_ART,A1 ; LOAD APARTMENT ART ADDRESS
@@ -477,6 +659,7 @@ CHECK_WOOD_BUILDING:
 
     ; INCREMENT HOUSES BUILT
     ADD.W   #1,HOUSES       ; ADD 1 HOUSE
+    ADD.W #1, BUILDING_HOUSES ; ADD 1 BUILDING
 
     ; DISPLAY BUILDING ART
     LEA     BUILDING_ART,A1 ; LOAD BUILDING ART ADDRESS
@@ -521,6 +704,7 @@ CHECK_WOOD_MANSION:
 
     ; INCREMENT HOUSES BUILT
     ADD.W   #1,HOUSES       ; ADD 1 HOUSE
+    ADD.W #1, MANSION_HOUSES ; ADD 1 MANSION
 
     ; DISPLAY MANSION ART
     LEA     MANSION_ART,A1  ; LOAD MANSION ART ADDRESS
@@ -533,13 +717,6 @@ CHECK_WOOD_MANSION:
     TRAP    #15
     RTS                     ; RETURN FROM BUILD_MANSION
 
-*-------------------------------------------------------
-* BACK_TO_MAIN SUBROUTINE
-* RETURNS TO THE MAIN MENU
-*-------------------------------------------------------
-BACK_TO_MAIN:
-    RTS                     ; RETURN TO MAIN MENU
-    
 *-------------------------------------------------------
 *-----------------HEADS UP DISPLAY (SCORE)--------------
 *-------------------------------------------------------   
@@ -620,35 +797,6 @@ DISPLAY_OBJECTIVE:
 
     MOVE.B  #4,D0           ; READ PLAYER INPUT
     TRAP    #15             ; WAIT FOR KEY PRESS
-    RTS
-    
-*-------------------------------------------------------
-*-----------------------BEING ATTACKED------------------
-* THIS COULD BE USED FOR COLLISION DETECTION
-*-------------------------------------------------------
-COLLISION:                  
-    MOVE.B  #DANGER_LOC,D1  ;MOVE LITERAL DANGER_LOC TO D1
-    CMP     #100,D1         ;  IS( X == 100)?
-    BNE     COLLISION_MISS  ;  IF NOT, BRANCH TO COLLISION_MISS
-    BSR     COLLISION_HIT   ;  ELSE, BRANCH TO COLLISION_HIT
-    RTS                     ;RETURN FROM COLLISION: SUBROUTINE  
-
-*-------------------------------------------------------
-* COLLISION_HIT SUBROUTINE
-*-------------------------------------------------------
-COLLISION_HIT:
-    LEA     HIT_MSG,A1       ; DISPLAY HIT MESSAGE
-    MOVE.B  #14,D0
-    TRAP    #15
-    RTS
-
-*-------------------------------------------------------
-* COLLISION_MISS SUBROUTINE
-*-------------------------------------------------------
-COLLISION_MISS:
-    LEA     MISS_MSG,A1      ; DISPLAY MISS MESSAGE
-    MOVE.B  #14,D0
-    TRAP    #15
     RTS
     
 GATHER_RESOURCES:
@@ -743,12 +891,6 @@ SELL_HOUSE:
 
     RTS                     ; RETURN FROM SELL_HOUSE
 
-NO_HOUSES_TO_SELL:
-    LEA     NO_HOUSES_MSG,A1 ; LOAD NO HOUSES MESSAGE
-    MOVE.B  #14,D0          ; DISPLAY STRING
-    TRAP    #15
-    RTS
-    
 *-------------------------------------------------------
 * VIEW_STATS SUBROUTINE
 * DISPLAYS THE PLAYER'S INVENTORY AND STATS
@@ -892,6 +1034,72 @@ PRESS_CONTINUE:
     ; RETURN TO MAIN MENU
     BRA     GAMEPLAY_MENU   ; BRANCH BACK TO MAIN MENU
 
+*-----------------------------------------------------------
+* DEV_MODE SUBROUTINE
+* ALLOWS DEVELOPER TO MODIFY GAME VARIABLES
+*-----------------------------------------------------------
+DEV_MODE:
+    BSR     ENDL
+    BSR     DECORATE
+    LEA     DEV_MODE_MSG,A1  ; DISPLAY DEV MODE ACTIVATED MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+
+    ; INPUT NEW WOOD VALUE
+    LEA     ENTER_WOOD_MSG,A1 ; PROMPT FOR WOOD VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,WOOD          ; STORE NEW WOOD VALUE
+
+    ; INPUT NEW STONE VALUE
+    LEA     ENTER_STONE_MSG,A1 ; PROMPT FOR STONE VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,STONE         ; STORE NEW STONE VALUE
+
+    ; INPUT NEW METAL VALUE
+    LEA     ENTER_METAL_MSG,A1 ; PROMPT FOR METAL VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,METAL         ; STORE NEW METAL VALUE
+
+    ; INPUT NEW HOUSES VALUE
+    LEA     ENTER_HOUSES_MSG,A1 ; PROMPT FOR HOUSES VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,HOUSES        ; STORE NEW HOUSES VALUE
+
+    ; INPUT NEW BUCKS VALUE
+    LEA     ENTER_BUCKS_MSG,A1 ; PROMPT FOR BUCKS VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,BUCKS         ; STORE NEW BUCKS VALUE
+
+    ; INPUT NEW PROFIT VALUE
+    LEA     ENTER_PROFIT_MSG,A1 ; PROMPT FOR PROFIT VALUE
+    MOVE.B  #14,D0
+    TRAP    #15
+    MOVE.B  #4,D0            ; READ INPUT
+    TRAP    #15
+    MOVE.W  D1,PROFIT        ; STORE NEW PROFIT VALUE
+
+    ; DISPLAY SUCCESS MESSAGE
+    LEA     VALUES_UPDATED_MSG,A1 ; DISPLAY VALUES UPDATED MESSAGE
+    MOVE.B  #14,D0
+    TRAP    #15
+    BSR     PRESS_CONTINUE   ; WAIT FOR KEY PRESS AND RETURN TO MENU
+    RTS
+
 ENDL:
     MOVEM.L D0/A1,-(A7)     ;SAVE D0 AND A1
     MOVE    #14,D0          ;MOVE LITERAL 14 TO DO
@@ -900,237 +1108,194 @@ ENDL:
     MOVEM.L (A7)+,D0/A1     ;RESTORE D0 AND A1
     RTS                     ;RETURN FROM ENDL: SUBROUTINE
 
-*-------------------------------------------------------
+*-----------------------------------------------------------
 *-------------------DATA DECLARATIONS--------------------
-*-------------------------------------------------------
+*-----------------------------------------------------------
 
-CRLF:           DC.B    $0D,$0A,0
-WELCOME_MSG:    DC.B    '************************************************************',$0D,$0A
-                DC.B    'WELCOME TO THE ULTIMATE HOUSE BUILD',$0D,$0A
-                DC.B    '************************************************************',$0D,0
-                DC.B    $0D,$0A,0                
+*-----------------------------------------------------------
+* CONSTANTS
+*-----------------------------------------------------------
+EXIT                    EQU 0           ; USED TO EXIT ASSEMBLY PROGRAM
+DAILY_PAYMENT           EQU 20          ; BUCKS EARNED WHEN SKIPPING TO NEXT DAY
+TARGET_BUCKS            EQU 500         ; TARGET AMOUNT OF BUCKS TO WIN THE GAME
+GATHER_BUCKS_COST       EQU 10          ; BUCKS REQUIRED TO GATHER RESOURCES
+DETACHED_BUCKS_COST     EQU 30          ; BUCKS REQUIRED TO BUILD A DETACHED HOUSE
+APARTMENT_BUCKS_COST    EQU 50          ; BUCKS REQUIRED TO BUILD AN APARTMENT
+BUILDING_BUCKS_COST     EQU 100         ; BUCKS REQUIRED TO BUILD A BUILDING
+MANSION_BUCKS_COST      EQU 200         ; BUCKS REQUIRED TO BUILD A MANSION
+DETACHED_SELL_PRICE     EQU 45          ; MAX OFFER FOR A DETACHED HOUSE
+APARTMENT_SELL_PRICE    EQU 75          ; MAX OFFER FOR AN APARTMENT
+BUILDING_SELL_PRICE     EQU 150         ; MAX OFFER FOR A BUILDING
+MANSION_SELL_PRICE      EQU 300         ; MAX OFFER FOR A MANSION
 
+*-----------------------------------------------------------
+* VARIABLES
+*-----------------------------------------------------------
+WOOD                    DS.W    1       ; AMOUNT OF WOOD
+STONE                   DS.W    1       ; AMOUNT OF STONE
+METAL                   DS.W    1       ; AMOUNT OF METAL
+ENERGY                  DS.W  100       ; VALUE IN ENERGY
+DAY                     DS.W    1       ; CURRENT DAY
+DETACHED_HOUSES         DS.W    1       ; NUMBER OF DETACHED HOUSES BUILT
+APARTMENT_HOUSES        DS.W    1       ; NUMBER OF APARTMENTS BUILT
+BUILDING_HOUSES         DS.W    1       ; NUMBER OF BUILDINGS BUILT
+MANSION_HOUSES          DS.W    1       ; NUMBER OF MANSIONS BUILT
+HOUSES                  DS.W    1       ; TOTAL HOUSES BUILT (SUM OF ALL TYPES)
+BUCKS                   DS.W    100     ; PLAYER'S MONEY (BUCKS)
+PROFIT                  DS.W    1       ; TOTAL PROFIT EARNED
+SCORE                   DS.W    1       ; RESERVE SPACE FOR SCORE
 
-OBJECTIVE_MSG:  
-    DC.B    '************************************************************',$0D,$0A
-    DC.B    'OBJECTIVE:',$0D,$0A
-    DC.B    'BUILD HOUSES BY GATHERING RESOURCES LIKE WOOD, STONE, AND METAL.',$0D,$0A
-    DC.B    'MANAGE YOUR RESOURCES WISELY TO CONSTRUCT HOUSES AND SELL THEM',$0D,$0A
-    DC.B    'FOR A PROFIT. BECOME THE BEST HOUSE BUILDER IN THE LAND!',$0D,$0A
-    DC.B    '************************************************************',$0D,$0A,0
-                
-GAMEPLAY_MSG:   
-    DC.B    'WELCOME TO HOUSE BUILDER! LETS CONSTRUCT SOME HOUSES!',$0D,$0A,0
-UPDATE_MSG:     
-    DC.B    'UPDATING CONSTRUCTION PROGRESS...',$0D,$0A,0
+*-----------------------------------------------------------
+* MESSAGES
+*-----------------------------------------------------------
 
-DRAW_MSG:       
-    DC.B    'REDRAWING CONSTRUCTION SITE...',$0D,0
+*--- GENERAL MESSAGES ---
+CRLF                    DC.B    $0D,$0A,0
+LOOP_MSG                DC.B    '.',0
+DEBUG_BUCKS_MSG         DC.B    'Current BUCKS: ', 0
 
-HIT_MSG:        
-    DC.B    'OH NO! A STORM DAMAGED YOUR HOUSE!',0
+*--- WELCOME AND OBJECTIVE MESSAGES ---
+WELCOME_MSG             DC.B    '************************************************************',$0D,$0A
+                        DC.B    'WELCOME TO THE ULTIMATE HOUSE BUILD',$0D,$0A
+                        DC.B    '************************************************************',$0D,0
+                        DC.B    $0D,$0A,0
+OBJECTIVE_MSG           DC.B    '************************************************************',$0D,$0A
+                        DC.B    'OBJECTIVE:',$0D,$0A
+                        DC.B    'BUILD HOUSES BY GATHERING RESOURCES LIKE WOOD, STONE, AND METAL.',$0D,$0A
+                        DC.B    'MANAGE YOUR RESOURCES WISELY TO CONSTRUCT HOUSES AND SELL THEM',$0D,$0A
+                        DC.B    'FOR A PROFIT. BECOME THE BEST HOUSE BUILDER IN THE LAND!',$0D,$0A
+                        DC.B    '************************************************************',$0D,$0A,0
 
-MISS_MSG:       
-    DC.B    'SAFE! THE WEATHER IS CLEAR FOR CONSTRUCTION.',0
-LOOP_MSG:       DC.B    '.',0
-REPLAY_MSG:     DC.B    'ENTER 0 TO QUIT, ANY OTHER NUMBER TO REPLAY: ',0
-CONTINUE_MSG:   DC.B    'PRESS ANY KEY TO CONTINUE...', $0D, $0A, 0
-PRESS_CONTINUE_MSG:   DC.B    'PRESS ANYKEY TO CONTINUE: ',0
-PAYMENT_MSG:     
-    DC.B    'You earned ',0
-PAYMENT_END_MSG: 
-    DC.B    ' bucks for the day.', $0D, $0A, 0
-HUD_MSG:        
-    DC.B    'RESOURCES: WOOD=',0
-WOOD_MSG:       
-    DC.B    ' STONE=',0
-STONE_MSG:      
-    DC.B    ' STONE=',0
-METAL_MSG:      
-    DC.B    ' METAL=',0    
-HOUSES_MSG:     
-    DC.B    ' HOUSES BUILT=',0
-PROFIT_MSG:     
-    DC.B    ' PROFIT=$',0
-ENERGY_MSG:     
-    DC.B    ' ENERGY=',0
-BUCKS_MSG:     
-    DC.B    ' BUCKS=$',0
-WOOD:       DS.W    1   ; AMOUNT OF WOOD
-STONE:      DS.W    1   ; AMOUNT OF STONE
-METAL:      DS.W    1   ; AMOUNT OF METAL
-ENERGY:   DS.W 100  ;VALUE IN ENERGY
-DAY:           DS.W 1
-*-------------------------------------------------------
-* HOUSE VARIABLES
-*-------------------------------------------------------
-DETACHED_HOUSES:   DS.W    1   ; NUMBER OF DETACHED HOUSES BUILT
-APARTMENT_HOUSES:  DS.W    1   ; NUMBER OF APARTMENTS BUILT
-BUILDING_HOUSES:   DS.W    1   ; NUMBER OF BUILDINGS BUILT
-MANSION_HOUSES:    DS.W    1   ; NUMBER OF MANSIONS BUILT
-HOUSES:      DS.W    1   ; TOTAL HOUSES BUILT (SUM OF ALL TYPES)
+*--- GAMEPLAY AND UPDATE MESSAGES ---
+GAMEPLAY_MSG            DC.B    'WELCOME TO HOUSE BUILDER! LETS CONSTRUCT SOME HOUSES!',$0D,$0A,0
+UPDATE_MSG              DC.B    'UPDATING CONSTRUCTION PROGRESS...',$0D,$0A,0
+DRAW_MSG                DC.B    'REDRAWING CONSTRUCTION SITE...',$0D,0
+REPLAY_MSG              DC.B    'ENTER 0 TO QUIT, ANY OTHER NUMBER TO REPLAY: ',0
+CONTINUE_MSG            DC.B    'PRESS ANY KEY TO CONTINUE...', $0D, $0A, 0
+PRESS_CONTINUE_MSG      DC.B    'PRESS ANYKEY TO CONTINUE: ',0
+PAYMENT_MSG             DC.B    'You earned ',0
+PAYMENT_END_MSG         DC.B    ' bucks for the day.', $0D, $0A, 0
+NEW_DAY_MSG             DC.B    'YOU FEEL YOUR ENERGY REPLENISH..',$0D,$0A,0
+DAY_MSG                 DC.B    ' DAY ',0
+GOAL_MSG                DC.B    'GOAL: Make ',0
+GOAL_END_MSG            DC.B    ' bucks as fast as you can! Fewer days = better score.', $0D, $0A, 0
+STATS_HEADER            DC.B    'STATS:',$0D,$0A,0
+HUD_MSG                 DC.B    'RESOURCES: WOOD=',0
+WOOD_MSG                DC.B    ' WOOD=',0
+STONE_MSG               DC.B    ' STONE=',0
+METAL_MSG               DC.B    ' METAL=',0
+HOUSES_MSG              DC.B    ' HOUSES BUILT=',0
+PROFIT_MSG              DC.B    ' PROFIT=$',0
+ENERGY_MSG              DC.B    ' ENERGY=',0
+BUCKS_MSG               DC.B    ' BUCKS=$',0
+GAMEPLAY_MENU_MSG       DC.B    'GAMEPLAY MENU:',$0D,$0A
+                        DC.B    '1. GATHER RESOURCES',$0D,$0A
+                        DC.B    '2. BUILD HOUSE',$0D,$0A
+                        DC.B    '3. SELL HOUSE',$0D,$0A
+                        DC.B    '4. VIEW STATS',$0D,$0A
+                        DC.B    '5. QUIT GAME',$0D,$0A
+                        DC.B    '6. SKIP TO NEXT DAY',$0D,$0A,0
 
-BUCKS:      DS.W    100   ; PLAYER'S MONEY (BUCKS)
-PROFIT:     DS.W    1   ; TOTAL PROFIT EARNED
+INVALID_INPUT_MSG       DC.B    'INVALID INPUT! PLEASE CHOOSE 1, 2, 3, 4, OR 5.',$0D,$0A,0
 
-SCORE:          DS.W    1   ;RESERVE SPACE FOR SCORE
-GOAL_MSG:       
-    DC.B    'GOAL: Make ',0
-GOAL_END_MSG:   
-    DC.B    ' bucks as fast as you can! Fewer days = better score.', $0D, $0A, 0
+*--- BUILDING AND SELLING MESSAGES ---
+BUILD_HOUSE_MENU_MSG    DC.B    'BUILD HOUSE MENU:', $0D, $0A
+                        DC.B    '1. DETACHED HOUSE (30 BUCKS, 10 WOOD, 5 STONE, 3 METAL)', $0D, $0A
+                        DC.B    '2. APARTMENT (50 BUCKS, 20 WOOD, 10 STONE, 5 METAL)', $0D, $0A
+                        DC.B    '3. BUILDING (100 BUCKS, 50 WOOD, 30 STONE, 10 METAL)', $0D, $0A
+                        DC.B    '4. MANSION (200 BUCKS, 100 WOOD, 50 STONE, 20 METAL)', $0D, $0A
+                        DC.B    '5. BACK TO MAIN MENU', $0D, $0A, 0
+SELL_HOUSE_MENU_MSG     DC.B    'SELL HOUSE MENU:', $0D, $0A
+                        DC.B    '1. SELL DETACHED HOUSE ($45)', $0D, $0A
+                        DC.B    '2. SELL APARTMENT ($75)', $0D, $0A
+                        DC.B    '3. SELL BUILDING ($150)', $0D, $0A
+                        DC.B    '4. SELL MANSION ($300)', $0D, $0A
+                        DC.B    '5. BACK TO MAIN MENU', $0D, $0A, 0
+SCANNING_MSG            DC.B    'Scanning for offers...', $0D, $0A, 0
+DETACHED_SOLD_MSG       DC.B    'Detached house sold for $45!', $0D, $0A, 0
+APARTMENT_SOLD_MSG      DC.B    'Apartment sold for $75!', $0D, $0A, 0
+BUILDING_SOLD_MSG       DC.B    'Building sold for $150!', $0D, $0A, 0
+MANSION_SOLD_MSG        DC.B    'Mansion sold for $300!', $0D, $0A, 0
+DETACHED_BUILT_MSG      DC.B    'DETACHED HOUSE BUILT SUCCESSFULLY!', $0D, $0A, 0
+APARTMENT_BUILT_MSG     DC.B    'APARTMENT BUILT SUCCESSFULLY!', $0D, $0A, 0
+BUILDING_BUILT_MSG      DC.B    'BUILDING BUILT SUCCESSFULLY!', $0D, $0A, 0
+MANSION_BUILT_MSG       DC.B    'MANSION BUILT SUCCESSFULLY!', $0D, $0A, 0
+HOUSE_BUILT_MSG         DC.B    'HOUSE BUILT SUCCESSFULLY!',0
+NO_ENERGY_MSG           DC.B    'You are too exhausted to gather resources! Rest until the next day.',$0D,$0A,0
+NOT_ENOUGH_WOOD_MSG     DC.B    'NOT ENOUGH WOOD TO BUILD A HOUSE!',0
+NOT_ENOUGH_STONE_MSG    DC.B    'NOT ENOUGH STONE TO BUILD A HOUSE!',0
+NOT_ENOUGH_METAL_MSG    DC.B    'NOT ENOUGH METAL TO BUILD A HOUSE!',0
+NOT_ENOUGH_BUCKS_MSG    DC.B    'Not enough bucks to perform this action!', $0D, $0A, 0
+HOUSE_SOLD_MSG          DC.B    'HOUSE SOLD FOR $100 PROFIT AND $50 BUCKS!', $0D, $0A, 0
+NO_HOUSES_MSG           DC.B    'NO HOUSES TO SELL!',0
+LOW_ENERGY_MSG          DC.B    'Your construction workers have called it a day..',$0D,$0A,0
+OPTION_1_MSG            DC.B    'STARTING QUEST...',$0D,$0A,0
+OPTION_5_MSG            DC.B    'QUITTING GAME... GOODBYE!',$0D,$0A,0
+GATHER_RESOURCES_MSG    DC.B    'GATHERING RESOURCES... WOOD, STONE, AND METAL ADDED TO YOUR INVENTORY.',$0D,$0A,0
 
-STATS_HEADER:   DC.B    'STATS:',$0D,$0A,0
-GAMEPLAY_MENU_MSG:
-    DC.B    'GAMEPLAY MENU:',$0D,$0A
-    DC.B    '1. GATHER RESOURCES',$0D,$0A
-    DC.B    '2. BUILD HOUSE',$0D,$0A
-    DC.B    '3. SELL HOUSE',$0D,$0A
-    DC.B    '4. VIEW STATS',$0D,$0A
-    DC.B    '5. QUIT GAME',$0D,$0A
-    DC.B    '6. SKIP TO NEXT DAY',$0D,$0A,0
+*--- DEV MODE MESSAGES ---
+DEV_MODE_MSG            DC.B    'DEV MODE ACTIVATED! ENTER NEW VALUES:', $0D, $0A, 0
+ENTER_WOOD_MSG          DC.B    'ENTER NEW WOOD VALUE: ', 0
+ENTER_STONE_MSG         DC.B    'ENTER NEW STONE VALUE: ', 0
+ENTER_METAL_MSG         DC.B    'ENTER NEW METAL VALUE: ', 0
+ENTER_HOUSES_MSG        DC.B    'ENTER NEW HOUSES VALUE: ', 0
+ENTER_BUCKS_MSG         DC.B    'ENTER NEW BUCKS VALUE: ', 0
+ENTER_PROFIT_MSG        DC.B    'ENTER NEW PROFIT VALUE: ', 0
+VALUES_UPDATED_MSG      DC.B    'VALUES UPDATED SUCCESSFULLY!', $0D, $0A, 0
 
-WIN_MSG:        
-    DC.B    'CONGRATULATIONS! You reached ',0
-WIN_BUCKS_MSG:  
-    DC.B    ' bucks in ',0
-WIN_DAYS_MSG:   
-    DC.B    ' days! The fewer days, the better your score!', $0D, $0A, 0
-LOSE_MSG:       
-    DC.B    'GAME OVER! You ran out of bucks after ',0
-LOSE_DAYS_MSG:  
-    DC.B    ' days.', $0D, $0A, 0
+*--- WIN/LOSE MESSAGES ---
+WIN_MSG                 DC.B    'CONGRATULATIONS! You reached ',0
+WIN_BUCKS_MSG           DC.B    ' bucks in ',0
+WIN_DAYS_MSG            DC.B    ' days! The fewer days, the better your score!', $0D, $0A, 0
+LOSE_MSG                DC.B    'GAME OVER! You ran out of bucks after ',0
+LOSE_DAYS_MSG           DC.B    ' days.', $0D, $0A, 0
+WIN_HOUSES_MSG          DC.B    'CONGRATULATIONS! You built 5 houses in ', 0
+OFFER_REJECTED_MSG      DC.B    'Offer rejected. Returning to menu...', $0D, $0A, 0
 
-HOUSE_BUILT_MSG:        
-    DC.B    'HOUSE BUILT SUCCESSFULLY!',0
-NO_ENERGY_MSG:      
-    DC.B    'You are too exhausted to gather resources! Rest until the next day.',$0D,$0A,0
-NOT_ENOUGH_WOOD_MSG:    
-    DC.B    'NOT ENOUGH WOOD TO BUILD A HOUSE!',0
-NOT_ENOUGH_STONE_MSG:   
-    DC.B    'NOT ENOUGH STONE TO BUILD A HOUSE!',0
-NOT_ENOUGH_METAL_MSG:   
-    DC.B    'NOT ENOUGH METAL TO BUILD A HOUSE!',0
-NOT_ENOUGH_BUCKS_MSG: 
-    DC.B    'Not enough bucks to perform this action!', $0D, $0A, 0
-HOUSE_SOLD_MSG:         
-    DC.B    'HOUSE SOLD FOR $100 PROFIT AND $50 BUCKS!', $0D, $0A, 0
-NO_HOUSES_MSG:          
-    DC.B    'NO HOUSES TO SELL!',0
-LOW_ENERGY_MSG:     
-    DC.B    'Your construction workers have called it a day..',$0D,$0A,0
-NEW_DAY_MSG:        
-    DC.B    'YOU FEEL YOUR ENERGY REPLENISH..',$0D,$0A,0
-DAY_MSG:            
-    DC.B    ' DAY ',0
-
-BUILD_HOUSE_MENU_MSG:
-    DC.B    'BUILD HOUSE MENU:', $0D, $0A
-    DC.B    '1. DETACHED HOUSE (10 WOOD, 5 STONE, 3 METAL)', $0D, $0A
-    DC.B    '2. APARTMENT (20 WOOD, 10 STONE, 5 METAL)', $0D, $0A
-    DC.B    '3. BUILDING (50 WOOD, 30 STONE, 10 METAL)', $0D, $0A
-    DC.B    '4. MANSION (100 WOOD, 50 STONE, 20 METAL)', $0D, $0A
-    DC.B    '5. BACK TO MAIN MENU', $0D, $0A, 0
-
-DETACHED_BUILT_MSG:
-    DC.B    'DETACHED HOUSE BUILT SUCCESSFULLY!', $0D, $0A, 0
-
-APARTMENT_BUILT_MSG:
-    DC.B    'APARTMENT BUILT SUCCESSFULLY!', $0D, $0A, 0
-
-BUILDING_BUILT_MSG:
-    DC.B    'BUILDING BUILT SUCCESSFULLY!', $0D, $0A, 0
-
-MANSION_BUILT_MSG:
-    DC.B    'MANSION BUILT SUCCESSFULLY!', $0D, $0A, 0
-
-INVALID_INPUT_MSG:
-    DC.B    'INVALID INPUT! PLEASE CHOOSE 1, 2, 3, 4, OR 5.',$0D,$0A,0
-
-OPTION_1_MSG:
-    DC.B    'STARTING QUEST...',$0D,$0A,0
-
-OPTION_5_MSG:
-    DC.B    'QUITTING GAME... GOODBYE!',$0D,$0A,0
-
-GATHER_RESOURCES_MSG:
-    DC.B    'GATHERING RESOURCES... WOOD, STONE, AND METAL ADDED TO YOUR INVENTORY.',$0D,$0A,0
-    
-DEV_MODE_MSG:
-    DC.B    'DEV MODE ACTIVATED! ENTER NEW VALUES:', $0D, $0A, 0
-
-ENTER_WOOD_MSG:
-    DC.B    'ENTER NEW WOOD VALUE: ', 0
-
-ENTER_STONE_MSG:
-    DC.B    'ENTER NEW STONE VALUE: ', 0
-
-ENTER_METAL_MSG:
-    DC.B    'ENTER NEW METAL VALUE: ', 0
-
-ENTER_HOUSES_MSG:
-    DC.B    'ENTER NEW HOUSES VALUE: ', 0
-
-ENTER_BUCKS_MSG:
-    DC.B    'ENTER NEW BUCKS VALUE: ', 0
-
-ENTER_PROFIT_MSG:
-    DC.B    'ENTER NEW PROFIT VALUE: ', 0
-
-VALUES_UPDATED_MSG:
-    DC.B    'VALUES UPDATED SUCCESSFULLY!', $0D, $0A, 0
-
-    
-HOUSE_ART:
-    DC.B    '    _________H ,%%&%,', $0D, $0A
-    DC.B    '   /\     _   \%&&%%&%', $0D, $0A
-    DC.B    '  /  \___/^\___\%&%%&&', $0D, $0A
-    DC.B    '  |  | []   [] |%\Y&%''', $0D, $0A
-    DC.B    '  |  |   .-.   | ||  ', $0D, $0A
-    DC.B    '~~@._|@@_|||_@@|~||~~~~~~~~~~~~~', $0D, $0A
-    DC.B    '     `""") )"""`', $0D, $0A, 0
-
-MANSION_ART:
-    DC.B    '         (', $0D, $0A
-    DC.B    '           )', $0D, $0A
-    DC.B    '         ( _   _._', $0D, $0A
-    DC.B    '          |_|-''_~_`-.', $0D, $0A
-    DC.B    '       _.-''-_~_-~_-~-_`-._', $0D, $0A
-    DC.B    '   _.-''_~-_~-_-~-_~_~-_~-_`-._', $0D, $0A
-    DC.B    '  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~', $0D, $0A
-    DC.B    '    |  []  []   []   []  [] |', $0D, $0A
-    DC.B    '    |           __    ___   |', $0D, $0A
-    DC.B    '  ._|  []  []  | .|  [___]  |_._._._._._._._._._._._._._._._._.', $0D, $0A
-    DC.B    '  |=|________()|__|()_______|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|', $0D, $0A
-    DC.B    '^^^^^^^^^^^^^^^ === ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', $0D, $0A
-    DC.B    '    _______      ===', $0D, $0A
-    DC.B    '   <_4sale_>       ===', $0D, $0A
-    DC.B    '      ^|^             ===', $0D, $0A
-    DC.B    '       |                 ===', $0D, $0A, 0
-
-
-BUILDING_ART:
-    DC.B    '__                   ___                       ( )', $0D, $0A
-    DC.B    ' |""|  ___    _   __  |"""|  __                   `', $0D, $0A
-    DC.B    ' |""| |"""|  |"| |""| |"""| |""|        _._ _', $0D, $0A
-    DC.B    ' |""| |"""|  |"| |""| |"""| |""|       (__((_(', $0D, $0A
-    DC.B    ' |""| |"""|  |"| |""| |"""| |""|      \''-:--:-.', $0D, $0A
-    DC.B    ' "''''"''"''''""''''''"""''""''""~~~~~~''-----''~~~~  ldb', $0D, $0A, 0
-
-APARTMENT_ART:
-    DC.B    '   _______________', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |  []  []  []  |', $0D, $0A
-    DC.B    '  |______________|', $0D, $0A
-    DC.B    '  |              |', $0D, $0A
-    DC.B    '  |    APARTMENT |', $0D, $0A
-    DC.B    '  |______________|', $0D, $0A
-    DC.B    '  |              |', $0D, $0A
-    DC.B    '  |    FOR RENT  |', $0D, $0A
-    DC.B    '  |______________|', $0D, $0A, 0
+*--- ART ASSETS ---
+HOUSE_ART               DC.B    '    _________H ,%%&%,', $0D, $0A
+                        DC.B    '   /\     _   \%&&%%&%', $0D, $0A
+                        DC.B    '  /  \___/^\___\%&%%&&', $0D, $0A
+                        DC.B    '  |  | []   [] |%\Y&%''', $0D, $0A
+                        DC.B    '  |  |   .-.   | ||  ', $0D, $0A
+                        DC.B    '~~@._|@@_|||_@@|~||~~~~~~~~~~~~~', $0D, $0A
+                        DC.B    '     `""") )"""`', $0D, $0A, 0
+MANSION_ART             DC.B    '         (', $0D, $0A
+                        DC.B    '           )', $0D, $0A
+                        DC.B    '         ( _   _._', $0D, $0A
+                        DC.B    '          |_|-''_~_`-.', $0D, $0A
+                        DC.B    '       _.-''-_~_-~_-~-_`-._', $0D, $0A
+                        DC.B    '   _.-''_~-_~-_-~-_~_~-_~-_`-._', $0D, $0A
+                        DC.B    '  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~', $0D, $0A
+                        DC.B    '    |  []  []   []   []  [] |', $0D, $0A
+                        DC.B    '    |           __    ___   |', $0D, $0A
+                        DC.B    '  ._|  []  []  | .|  [___]  |_._._._._._._._._._._._._._._._.', $0D, $0A
+                        DC.B    '  |=|________()|__|()_______|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|=|', $0D, $0A
+                        DC.B    '^^^^^^^^^^^^^^^ === ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^', $0D, $0A
+                        DC.B    '    _______      ===', $0D, $0A
+                        DC.B    '   <_4sale_>       ===', $0D, $0A
+                        DC.B    '      ^|^             ===', $0D, $0A
+                        DC.B    '       |                 ===', $0D, $0A, 0
+BUILDING_ART            DC.B    '__                   ___                       ( )', $0D, $0A
+                        DC.B    ' |""|  ___    _   __  |"""|  __                   `', $0D, $0A
+                        DC.B    ' |""| |"""|  |"| |""| |"""| |""|        _._ _', $0D, $0A
+                        DC.B    ' |""| |"""|  |"| |""| |"""| |""|       (__((_(', $0D, $0A
+                        DC.B    ' |""| |"""|  |"| |""| |"""| |""|      \''-:--:-.', $0D, $0A
+                        DC.B    ' "''''"''"''''""''''''"""''""''""~~~~~~''-----''~~~~  ldb', $0D, $0A, 0
+APARTMENT_ART           DC.B    '   _______________', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |  []  []  []  |', $0D, $0A
+                        DC.B    '  |______________|', $0D, $0A
+                        DC.B    '  |              |', $0D, $0A
+                        DC.B    '  |    APARTMENT |', $0D, $0A
+                        DC.B    '  |______________|', $0D, $0A
+                        DC.B    '  |              |', $0D, $0A
+                        DC.B    '  |    FOR RENT  |', $0D, $0A
+                        DC.B    '  |______________|', $0D, $0A, 0
 
     END START
 
