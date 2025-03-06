@@ -17,12 +17,25 @@
 *VALIDATION VALUES TO BE USED, MODIFY AS NEEDED
 *-------------------------------------------------------
 EXIT		EQU 0			;USED TO EXIT ASSEMBLY PROGRAM
-MIN_POTIONS	EQU 1			;MIN NUMBER OF SMALL POTIONS
-MAX_POTIONS	EQU 9			;MAX NUMBER OF SMALL POTIONS
-MIN_WEAPONS	EQU 1			;MIN WEAPONS (NEEDLE SWORD, ACORN SHIELD)
-MAX_WEAPONS	EQU 3			;MAX WEAPONS
-WIN_POINT	EQU 5			;BRAVERY POINTS GAINED ON SUCCESS
-LOSE_POINT	EQU 8			;BRAVERY POINTS LOST ON FAILURE
+
+*-------------------------------------------------------
+* HOUSE BUILDING COSTS
+*-------------------------------------------------------
+DETACHED_COST_WOOD:    EQU 10   ; WOOD REQUIRED TO BUILD A DETACHED HOUSE
+DETACHED_COST_STONE:   EQU 5    ; STONE REQUIRED TO BUILD A DETACHED HOUSE
+DETACHED_COST_METAL:   EQU 3    ; METAL REQUIRED TO BUILD A DETACHED HOUSE
+
+APARTMENT_COST_WOOD:   EQU 20   ; WOOD REQUIRED TO BUILD AN APARTMENT
+APARTMENT_COST_STONE:  EQU 10   ; STONE REQUIRED TO BUILD AN APARTMENT
+APARTMENT_COST_METAL:  EQU 5    ; METAL REQUIRED TO BUILD AN APARTMENT
+
+BUILDING_COST_WOOD:    EQU 50   ; WOOD REQUIRED TO BUILD A BUILDING
+BUILDING_COST_STONE:   EQU 30   ; STONE REQUIRED TO BUILD A BUILDING
+BUILDING_COST_METAL:   EQU 10   ; METAL REQUIRED TO BUILD A BUILDING
+
+MANSION_COST_WOOD:     EQU 100  ; WOOD REQUIRED TO BUILD A MANSION
+MANSION_COST_STONE:    EQU 50   ; STONE REQUIRED TO BUILD A MANSION
+MANSION_COST_METAL:    EQU 20   ; METAL REQUIRED TO BUILD A MANSION
 
 DANGER_LOC  EQU 100         ;USED FOR SIMPLE COLLISION DETECTION
                             ;* EXAMPLE FOR A HIT (GIANT FOOTSTEP)
@@ -83,7 +96,7 @@ GAMELOOP:
     ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN 
     BSR     GAMEPLAY        ;BRANCH TO GAMEPLAY SUBROUTINE
     ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN        
-    BSR     HUD             ;BRANCH TO HUD SUBROUTINE
+    ;BSR     HUD             ;BRANCH TO HUD SUBROUTINE
     ;BSR     CLEAR_SCREEN    ;CLEARS THE SCREEN
     
     BSR     REPLAY          ;BRANCH TO REPLAY SUBROUTINE 
@@ -132,6 +145,7 @@ GAMEPLAY:
     TRAP    #15
 
 GAMEPLAY_MENU:
+    BSR HUD
     BSR     DECORATE        ; DECORATE THE SCREEN
     LEA     GAMEPLAY_MENU_MSG,A1 ; LOAD GAMEPLAY MENU MESSAGE
     MOVE.B  #14,D0          ; DISPLAY STRING
@@ -168,28 +182,28 @@ GAMEPLAY_MENU:
 *-------------------------------------------------------
 OPTION_1:
     BSR     GATHER_RESOURCES ; BRANCH TO GATHER_RESOURCES SUBROUTINE
-    RTS                     ; RETURN FROM GAMEPLAY SUBROUTINE
+    BRA     GAMEPLAY_MENU    ; RETURN TO GAMEPLAY MENU
 
 *-------------------------------------------------------
 * OPTION 2: BUILD HOUSE
 *-------------------------------------------------------
 OPTION_2:
-    BSR     BUILD_HOUSE     ; BRANCH TO BUILD_HOUSE SUBROUTINE
-    RTS                     ; RETURN FROM GAMEPLAY SUBROUTINE
+    BSR     BUILD_HOUSE_MENU     ; BRANCH TO BUILD_HOUSE SUBROUTINE
+    BSR     PRESS_CONTINUE  ; RETURN TO MAIN MENU
 
 *-------------------------------------------------------
 * OPTION 3: SELL HOUSE
 *-------------------------------------------------------
 OPTION_3:
     BSR     SELL_HOUSE      ; BRANCH TO SELL_HOUSE SUBROUTINE
-    RTS                     ; RETURN FROM GAMEPLAY SUBROUTINE
+    BSR     PRESS_CONTINUE  ; RETURN TO MAIN MENU
 
 *-------------------------------------------------------
 * OPTION 4: VIEW STATS
 *-------------------------------------------------------
 OPTION_4:
     BSR     VIEW_STATS      ; BRANCH TO VIEW_STATS SUBROUTINE
-    RTS                     ; RETURN FROM GAMEPLAY SUBROUTINE
+    BSR     PRESS_CONTINUE  ; RETURN TO MAIN MENU
 
 *-------------------------------------------------------
 * OPTION 5: QUIT GAME
@@ -232,6 +246,11 @@ BUILD_HOUSE_MENU:
     MOVE.B  #14,D0          ; DISPLAY STRING
     TRAP    #15
     BRA     BUILD_HOUSE_MENU ; LOOP BACK TO DISPLAY MENU AGAIN
+
+*-------------------------------------------------------
+* BUILD_HOUSE SUBROUTINE
+* BUILDS A HOUSE BASED ON THE SELECTED TYPE
+*-------------------------------------------------------
 
 *-------------------------------------------------------
 * BUILD_DETACHED SUBROUTINE
@@ -395,10 +414,10 @@ HUD:
     MOVE.W  HOUSES,D1       ; DISPLAY HOUSES
     MOVE.B  #3,D0           
     TRAP    #15             
-    LEA     PROFIT_MSG,A1   
+    LEA     BUCKS_MSG,A1   
     MOVE.B  #14,D0          
     TRAP    #15             
-    MOVE.W  PROFIT,D1       ; DISPLAY PROFIT
+    MOVE.W  BUCKS,D1       ; DISPLAY PROFIT
     MOVE.B  #3,D0           
     TRAP    #15             
     BSR     DECORATE        
@@ -426,25 +445,13 @@ DISPLAY_OBJECTIVE:
 *-----------------------BEING ATTACKED------------------
 * THIS COULD BE USED FOR COLLISION DETECTION
 *-------------------------------------------------------
-COLLISION:
-    BSR     GENERATE_RANDOM  ; GENERATE A RANDOM NUMBER
-    CMP.B   #50,D1           ; COMPARE RANDOM NUMBER TO 50 (50% CHANCE)
-    BHI     COLLISION_MISS   ; IF RANDOM NUMBER > 50, BRANCH TO COLLISION_MISS
-    BSR     COLLISION_HIT    ; IF RANDOM NUMBER <= 50, BRANCH TO COLLISION_HIT
-    RTS
+COLLISION:                  
+    MOVE.B  #DANGER_LOC,D1  ;MOVE LITERAL DANGER_LOC TO D1
+    CMP     #100,D1         ;  IS( X == 100)?
+    BNE     COLLISION_MISS  ;  IF NOT, BRANCH TO COLLISION_MISS
+    BSR     COLLISION_HIT   ;  ELSE, BRANCH TO COLLISION_HIT
+    RTS                     ;RETURN FROM COLLISION: SUBROUTINE  
 
-*-------------------------------------------------------
-* GENERATE RANDOM NUMBER SUBROUTINE
-*-------------------------------------------------------
-GENERATE_RANDOM:
-    MOVE.W  RANDOM_SEED,D1   ; LOAD CURRENT SEED INTO D1
-    MULU.W  #11035,D1        ; MULTIPLY BY A SMALLER PRIME NUMBER (16-BIT)
-    ADD.W   #12345,D1        ; ADD AN OFFSET
-    AND.W   #32767,D1        ; MASK TO KEEP NUMBER WITHIN 0-32767
-    MOVE.W  D1,RANDOM_SEED   ; UPDATE SEED FOR NEXT CALL
-    DIVU.W  #327,D1          ; SCALE TO 0-99
-    SWAP    D1               ; GET THE REMAINDER (RANDOM NUMBER)
-    RTS
 *-------------------------------------------------------
 * COLLISION_HIT SUBROUTINE
 *-------------------------------------------------------
@@ -478,16 +485,9 @@ GATHER_RESOURCES:
     ADD.W   #5,STONE        ; ADD 5 STONE
     ADD.W   #3,METAL        ; ADD 3 METAL
 
+
     RTS                     ; RETURN FROM GATHER_RESOURCES
  
-*-------------------------------------------------------
-* BUILD_HOUSE SUBROUTINE
-* BUILDS A HOUSE IF THE PLAYER HAS ENOUGH RESOURCES
-*-------------------------------------------------------
-BUILD_HOUSE:
-    BSR     BUILD_HOUSE_MENU ; BRANCH TO BUILD_HOUSE_MENU
-    RTS                     ; RETURN FROM BUILD_HOUSE
-
 NOT_ENOUGH_WOOD:
     LEA     NOT_ENOUGH_WOOD_MSG,A1 ; LOAD NOT ENOUGH WOOD MESSAGE
     MOVE.B  #14,D0          ; DISPLAY STRING
@@ -522,9 +522,20 @@ SELL_HOUSE:
     ADD.W   #100,BUCKS      ; ADD $100 TO BUCKS
     SUB.W   #50,PROFIT      ; SUBTRACT $50 FROM PROFIT (COST OF BUILDING THE HOUSE)
 
+    ; DISPLAY SUCCESS MESSAGE
     LEA     HOUSE_SOLD_MSG,A1 ; LOAD HOUSE SOLD MESSAGE
     MOVE.B  #14,D0          ; DISPLAY STRING
     TRAP    #15
+
+    ; DISPLAY UPDATED PROFIT
+    LEA     PROFIT_MSG,A1   ; LOAD PROFIT MESSAGE
+    MOVE.B  #14,D0          ; DISPLAY STRING
+    TRAP    #15
+    MOVE.W  PROFIT,D1       ; LOAD PROFIT VALUE
+    MOVE.B  #3,D0           ; DISPLAY VALUE
+    TRAP    #15
+    BSR     ENDL            ; NEW LINE
+
     RTS                     ; RETURN FROM SELL_HOUSE
 
 NO_HOUSES_TO_SELL:
@@ -663,6 +674,19 @@ CONTINUE:
     TRAP    #15             ;TRAP AND INTERPRET VALUE IN D0
     RTS                     ;RETURN FROM SUBROUTINE 
 
+PRESS_CONTINUE:
+    BSR     ENDL            ; NEW LINE
+    LEA     PRESS_CONTINUE_MSG,A1 ; LOAD "PRESS ANY KEY TO CONTINUE" MESSAGE
+    MOVE.B  #14,D0          ; DISPLAY STRING (TRAP #15, FUNCTION 14)
+    TRAP    #15
+
+    ; WAIT FOR PLAYER INPUT
+    MOVE.B  #4,D0           ; READ PLAYER INPUT
+    TRAP    #15             ; WAIT FOR KEY PRESS
+
+    ; RETURN TO MAIN MENU
+    BRA     GAMEPLAY_MENU   ; BRANCH BACK TO MAIN MENU
+
 ENDL:
     MOVEM.L D0/A1,-(A7)     ;SAVE D0 AND A1
     MOVE    #14,D0          ;MOVE LITERAL 14 TO DO
@@ -674,7 +698,6 @@ ENDL:
 *-------------------------------------------------------
 *-------------------DATA DECLARATIONS--------------------
 *-------------------------------------------------------
-RANDOM_SEED:    DC.W    12345  ; INITIAL SEED (CAN BE CHANGED)
 
 CRLF:           DC.B    $0D,$0A,0
 WELCOME_MSG:    DC.B    '************************************************************',$0D,$0A
@@ -694,10 +717,10 @@ OBJECTIVE_MSG:
 GAMEPLAY_MSG:   
     DC.B    'WELCOME TO HOUSE BUILDER! LETS CONSTRUCT SOME HOUSES!',$0D,$0A,0
 UPDATE_MSG:     
-    DC.B    'UPDATING CONSTRUCTION PROGRESS...',$0D,$0A
+    DC.B    'UPDATING CONSTRUCTION PROGRESS...',$0D,$0A,0
 
 DRAW_MSG:       
-    DC.B    'REDRAWING CONSTRUCTION SITE...',$0D,$0A,0
+    DC.B    'REDRAWING CONSTRUCTION SITE...',$0D,0
 
 HIT_MSG:        
     DC.B    'OH NO! A STORM DAMAGED YOUR HOUSE!',0
@@ -706,7 +729,8 @@ MISS_MSG:
     DC.B    'SAFE! THE WEATHER IS CLEAR FOR CONSTRUCTION.',0
 LOOP_MSG:       DC.B    '.',0
 REPLAY_MSG:     DC.B    'ENTER 0 TO QUIT, ANY OTHER NUMBER TO REPLAY: ',0
-CONTINUE_MSG:   DC.B    'PRESS ANYKEY TO CONTINUE: ',0
+CONTINUE_MSG:   DC.B    'PRESS ANY KEY TO CONTINUE...', $0D, $0A, 0
+PRESS_CONTINUE_MSG:   DC.B    'PRESS ANYKEY TO CONTINUE: ',0
 HUD_MSG:        
     DC.B    'RESOURCES: WOOD=',0
 WOOD_MSG:       
@@ -724,7 +748,15 @@ BUCKS_MSG:
 WOOD:       DS.W    1   ; AMOUNT OF WOOD
 STONE:      DS.W    1   ; AMOUNT OF STONE
 METAL:      DS.W    1   ; AMOUNT OF METAL
-HOUSES:     DS.W    1   ; NUMBER OF HOUSES BUILT
+*-------------------------------------------------------
+* HOUSE VARIABLES
+*-------------------------------------------------------
+DETACHED_HOUSES:   DS.W    1   ; NUMBER OF DETACHED HOUSES BUILT
+APARTMENT_HOUSES:  DS.W    1   ; NUMBER OF APARTMENTS BUILT
+BUILDING_HOUSES:   DS.W    1   ; NUMBER OF BUILDINGS BUILT
+MANSION_HOUSES:    DS.W    1   ; NUMBER OF MANSIONS BUILT
+HOUSES:      DS.W    1   ; TOTAL HOUSES BUILT (SUM OF ALL TYPES)
+
 BUCKS:      DS.W    100   ; PLAYER'S MONEY (BUCKS)
 PROFIT:     DS.W    1   ; TOTAL PROFIT EARNED
 
@@ -747,7 +779,7 @@ NOT_ENOUGH_STONE_MSG:
 NOT_ENOUGH_METAL_MSG:   
     DC.B    'NOT ENOUGH METAL TO BUILD A HOUSE!',0
 HOUSE_SOLD_MSG:         
-    DC.B    'HOUSE SOLD FOR $100 PROFIT AND $50 BUCKS!',0
+    DC.B    'HOUSE SOLD FOR $100 PROFIT AND $50 BUCKS!', $0D, $0A, 0
 NO_HOUSES_MSG:          
     DC.B    'NO HOUSES TO SELL!',0
 
