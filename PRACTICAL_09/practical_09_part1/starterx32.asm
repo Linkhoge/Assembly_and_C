@@ -24,5 +24,5 @@ _start:	                                 ;linker entry point
 ; DATA SECTION
 section	.data
 
-message db 'Assembly and C", 0xA    ;string to be printed
+message db 'Assembly and C', 0xA    ;string to be printed
 msg_length equ $-message                  ;length of the string
