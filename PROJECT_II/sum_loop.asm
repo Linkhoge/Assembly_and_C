@@ -2,11 +2,9 @@
 ; Title: Sum Loop Program for x86_64
 ; Author: Ariel Fajimiyo
 ; Student Number: C00300811
-; Date: May 05, 2025
 ; Description: Prompts for two numbers, computes their sum, and prints it.
 ;              Runs for 3 iterations, keeping a running sum.
 ;              Allows large numbers and overflow wrapping (no validation).
-; File: sum_loop.asm
 ;-----------------------------------------------------------
 
 section .data
