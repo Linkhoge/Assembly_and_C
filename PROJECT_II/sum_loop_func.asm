@@ -2,8 +2,9 @@
 ; Title: Sum Loop Test Functions for x86_64
 ; Author: Ariel Fajimiyo
 ; Student Number: C00300811
+; Date: May 05, 2025
 ; Description: Provides functions for test.c to test the sum loop logic.
-;              Allows overflow wrapping (no overflow handling).
+;              Allows overflow wrapping
 ;-----------------------------------------------------------
 
 section .data
@@ -18,7 +19,7 @@ global compute_sum    ; Expose compute_sum function to C
 compute_sum:
     ; Function: compute_sum
     ; Inputs: rdi = first number, rsi = second number
-    ; Output: rax = current sum (also updates running_sum)
+    ; Output: rax = actual sum (also updates running_sum)
     mov [num1], rdi       ; Store first number from rdi
 
     mov rax, [num1]       ; Load first number into rax
@@ -26,8 +27,7 @@ compute_sum:
 
     add [running_sum], rax ; Update running sum with the result
 
-    mov rax, rsi          ; Return the second number (to match sum_loop.asm behavior)
-    ret                   ; Return with second number in rax
+    ret                   ; Return the actual sum in rax
 
 global get_running_sum
 get_running_sum:
