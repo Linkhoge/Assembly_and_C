@@ -12,14 +12,10 @@ section .bss
 section .text
 global compute_sum    ; Expose function to C
 
-; Function: compute_sum
-; Inputs: rdi = first number, rsi = second number
-; Output: rax = current sum (also updates running_sum)
 compute_sum:
     mov [num1], rdi
 
-    mov rbx, [num1]       ; First number
-    mov rax, rbx          ; Prepare for addition
+    mov rax, [num1]       ; First number
     add rax, rsi          ; Add second number
     jo overflow           ; Jump if overflow
 
