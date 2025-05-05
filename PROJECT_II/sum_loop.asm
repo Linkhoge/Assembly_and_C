@@ -20,6 +20,7 @@ section .bss
     loop_counter resd 1     ; Loop counter (32-bit, as 3 fits)
     running_sum resq 1      ; Running sum (64-bit for x86_64)
     num1 resq 1             ; First number (64-bit)
+    num2 resq 1             ; Second number (64-bit)
     error_flag resd 1       ; Error flag (32-bit)
     negative_flag resd 1    ; Negative number flag (32-bit)
     num_buffer resb 12      ; Buffer for printing numbers
@@ -32,6 +33,7 @@ _start:
     mov dword [loop_counter], 3   ; Loop counter = 3
 
 game_loop:
+    ; Prompt and read first number
     mov rax, 1                    ; sys_write
     mov rdi, 1                    ; stdout
     mov rsi, PROMPT
@@ -49,6 +51,7 @@ game_loop:
     je invalid_input
     mov [num1], rax               ; Store first number
 
+    ; Prompt and read second number
     mov rax, 1
     mov rdi, 1
     mov rsi, PROMPT
@@ -64,23 +67,29 @@ game_loop:
     call string_to_num
     cmp dword [error_flag], 1
     je invalid_input
+    mov [num2], rax               ; Store second number
 
+    ; Add the two numbers
     mov rbx, [num1]
+    mov rcx, [num2]
     call register_adder
     add [running_sum], rax        ; Update running sum
 
+    ; Print "The sum is: "
     mov rax, 1
     mov rdi, 1
     mov rsi, RESULT
     mov rdx, 11                   ; Length of "The sum is: "
     syscall
 
+    ; Print the sum for this iteration
     call print_number
     call new_line
 
     dec dword [loop_counter]
     jnz game_loop
 
+    ; Print final sum
     mov rax, 1
     mov rdi, 1
     mov rsi, FINAL_RESULT
@@ -91,6 +100,7 @@ game_loop:
     call print_number
     call new_line
 
+    ; Exit
     mov rax, 60                   ; sys_exit
     xor rdi, rdi
     syscall
@@ -160,7 +170,7 @@ invalid:
 
 register_adder:
     mov rax, rbx                  ; First number
-    add rax, rbx                  ; Add second number
+    add rax, rcx                  ; Add second number (rcx holds num2)
     jo overflow                   ; Jump if overflow
     ret
 
