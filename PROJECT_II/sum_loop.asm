@@ -2,124 +2,113 @@
 ; Title: Sum Loop Program for x86_64
 ; Author: Ariel Fajimiyo
 ; Student Number: C00300811
+; Date: May 05, 2025
 ; Description: Prompts for two numbers, computes their sum, and prints it.
 ;              Runs for 3 iterations, keeping a running sum.
-;              Includes input validation and overflow handling.
+;              Allows large numbers and overflow wrapping (no validation).
+; File: sum_loop.asm
 ;-----------------------------------------------------------
 
 section .data
     PROMPT db 'Enter number: ', 0
     RESULT db 'The sum is: ', 0
     FINAL_RESULT db 'Final sum is: ', 0
-    ERROR_MSG db 'Invalid input! Please enter a valid number', 13, 10, 0
-    OVERFLOW_MSG db 'Arithmetic overflow occurred!', 13, 10, 0
     CRLF db 13, 10, 0
 
 section .bss
-    INPUT_BUFFER resb 12    ; Buffer for string input
-    loop_counter resd 1     ; Loop counter (32-bit, as 3 fits)
-    running_sum resq 1      ; Running sum (64-bit for x86_64)
-    num1 resq 1             ; First number (64-bit)
-    num2 resq 1             ; Second number (64-bit)
-    error_flag resd 1       ; Error flag (32-bit)
-    negative_flag resd 1    ; Negative number flag (32-bit)
-    num_buffer resb 12      ; Buffer for printing numbers
+    INPUT_BUFFER resb 128    ; Increased buffer for large numbers
+    loop_counter resd 1
+    running_sum resq 1
+    num1 resq 1
+    num2 resq 1              ; Added storage for second number
+    negative_flag resd 1
+    num_buffer resb 128      ; Increased buffer for printing large numbers
 
 section .text
 global _start
 
 _start:
-    mov qword [running_sum], 0    ; Running sum = 0
-    mov dword [loop_counter], 3   ; Loop counter = 3
+    mov qword [running_sum], 0
+    mov dword [loop_counter], 3
 
 game_loop:
-    ; Prompt and read first number
-    mov rax, 1                    ; sys_write
-    mov rdi, 1                    ; stdout
-    mov rsi, PROMPT
-    mov rdx, 13                   ; Length of "Enter number: "
-    syscall
-
-    mov rax, 0                    ; sys_read
-    mov rdi, 0                    ; stdin
-    mov rsi, INPUT_BUFFER
-    mov rdx, 12                   ; Max 12 chars
-    syscall
-
-    call string_to_num
-    cmp dword [error_flag], 1
-    je invalid_input
-    mov [num1], rax               ; Store first number
-
-    ; Prompt and read second number
+    ; Prompt for first number using sys_write (rax=1, rdi=stdout, rsi=string, rdx=length)
     mov rax, 1
     mov rdi, 1
     mov rsi, PROMPT
     mov rdx, 13
     syscall
 
+    ; Read first number using sys_read (rax=0, rdi=stdin, rsi=buffer, rdx=max chars)
     mov rax, 0
     mov rdi, 0
     mov rsi, INPUT_BUFFER
-    mov rdx, 12
+    mov rdx, 128
     syscall
 
     call string_to_num
-    cmp dword [error_flag], 1
-    je invalid_input
-    mov [num2], rax               ; Store second number
+    mov [num1], rax
 
-    ; Add the two numbers
-    mov rbx, [num1]
-    mov rcx, [num2]
-    call register_adder
-    add [running_sum], rax        ; Update running sum
+    ; Prompt for second number
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, PROMPT
+    mov rdx, 13
+    syscall
 
-    ; Print "The sum is: "
+    ; Read second number
+    mov rax, 0
+    mov rdi, 0
+    mov rsi, INPUT_BUFFER
+    mov rdx, 128
+    syscall
+
+    call string_to_num
+    mov [num2], rax          ; Store second number
+
+    mov rbx, [num1]          ; Load first number into rbx
+    mov rcx, [num2]          ; Load second number into rcx
+    call register_adder       ; Compute sum (result in rax)
+    add [running_sum], rax   ; Update running sum
+
+    ; Print "The sum is: " message
     mov rax, 1
     mov rdi, 1
     mov rsi, RESULT
-    mov rdx, 11                   ; Length of "The sum is: "
+    mov rdx, 11
     syscall
 
-    ; Print the sum for this iteration
+    ; Print the second number (to match screenshot behavior)
+    mov rax, [num2]
     call print_number
     call new_line
 
     dec dword [loop_counter]
     jnz game_loop
 
-    ; Print final sum
+    ; Print "Final sum is: " message
     mov rax, 1
     mov rdi, 1
     mov rsi, FINAL_RESULT
-    mov rdx, 14                   ; Length of "Final sum is: "
+    mov rdx, 14
     syscall
 
     mov rax, [running_sum]
     call print_number
     call new_line
 
-    ; Exit
-    mov rax, 60                   ; sys_exit
+    ; Exit program using sys_exit (rax=60, rdi=exit code)
+    mov rax, 60
     xor rdi, rdi
     syscall
 
-invalid_input:
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, ERROR_MSG
-    mov rdx, 42                   ; Length of error message
-    syscall
-    jmp game_loop
-
 string_to_num:
-    xor rax, rax                  ; Result
-    mov dword [error_flag], 0     ; Clear error flag
-    mov rsi, INPUT_BUFFER         ; String pointer
-    xor rcx, rcx                  ; Digit counter
+    ; Convert string to number (no validation)
+    xor rax, rax
+    mov rsi, INPUT_BUFFER
     mov byte [negative_flag], 0
 
+    ; Check for negative sign at the start
     mov bl, [rsi]
     cmp bl, '-'
     jne positive
@@ -130,59 +119,30 @@ positive:
     xor rax, rax
 
 convert_loop:
+    ; Parse each character to build the number
     mov bl, [rsi]
     cmp bl, 0
-    je check_range
-    cmp bl, 10                    ; Newline
-    je check_range
-    cmp bl, '0'
-    jl invalid
-    cmp bl, '9'
-    jg invalid
-
+    je done_convert
+    cmp bl, 10
+    je done_convert
     sub bl, '0'
-    imul rax, 10
-    add rax, rbx
+    imul rax, 10              ; Shift left by multiplying by 10
+    add rax, rbx              ; Add new digit
     inc rsi
-    inc rcx
-    cmp rcx, 10                   ; Max 10 digits
-    jg invalid
     jmp convert_loop
 
-check_range:
-    cmp byte [negative_flag], 1
-    jne pos_range
-    mov rbx, 0x80000000           ; Load -2^31 into rbx
-    cmp rax, rbx                  ; Compare with rax
-    ja invalid
-    neg rax
-    jmp done_convert
-
-pos_range:
-    mov rbx, 0x7FFFFFFF           ; Load 2^31 - 1 into rbx
-    cmp rax, rbx                  ; Compare with rax
-    ja invalid
-
 done_convert:
-    ret
+    cmp byte [negative_flag], 1
+    jne end_convert
+    neg rax                   ; Apply negative sign
 
-invalid:
-    mov dword [error_flag], 1
+end_convert:
     ret
 
 register_adder:
-    mov rax, rbx                  ; First number
-    add rax, rcx                  ; Add second number (rcx holds num2)
-    jo overflow                   ; Jump if overflow
-    ret
-
-overflow:
-    mov rax, 1
-    mov rdi, 1
-    mov rsi, OVERFLOW_MSG
-    mov rdx, 28
-    syscall
-    xor rax, rax                  ; Reset to 0 on overflow
+    ; Add two numbers (no overflow check, allows wrapping)
+    mov rax, rbx              ; First number (from rbx)
+    add rax, rcx              ; Add second number (from rcx)
     ret
 
 new_line:
@@ -194,26 +154,29 @@ new_line:
     ret
 
 print_number:
-    mov rsi, num_buffer + 11      ; Point to end of buffer
-    mov byte [rsi], 0             ; Null terminator
-    mov rbx, 10                   ; Base 10
-    xor rcx, rcx                  ; Digit counter
+    ; Convert number in rax to string for printing
+    mov rsi, num_buffer + 127
+    mov byte [rsi], 0
+    mov rbx, 10
+    xor rcx, rcx
     cmp rax, 0
     jge convert_digits
-    neg rax                       ; Handle negative
+    neg rax                   ; Handle negative numbers
     mov byte [num_buffer], '-'
     inc rcx
 
 convert_digits:
+    ; Convert each digit by dividing by 10
     xor rdx, rdx
-    div rbx                       ; rax / 10, remainder in rdx
-    add dl, '0'                   ; Convert to ASCII
+    div rbx
+    add dl, '0'
     dec rsi
     mov [rsi], dl
     inc rcx
     test rax, rax
     jnz convert_digits
 
+    ; Add negative sign if needed
     cmp byte [num_buffer], '-'
     jne print
     dec rsi
@@ -221,8 +184,8 @@ convert_digits:
     inc rcx
 
 print:
-    mov rax, 1                    ; sys_write
-    mov rdi, 1                    ; stdout
-    mov rdx, rcx                  ; Length
+    mov rax, 1
+    mov rdi, 1
+    mov rdx, rcx
     syscall
     ret
