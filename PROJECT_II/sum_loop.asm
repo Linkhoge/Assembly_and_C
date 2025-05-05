@@ -1,5 +1,7 @@
 ;-----------------------------------------------------------
 ; Title: Sum Loop Program for x86_64
+; Author: Ariel Fajimiyo
+; Student Number: C00300811
 ; Description: Prompts for two numbers, computes their sum, and prints it.
 ;              Runs for 3 iterations, keeping a running sum.
 ;              Includes input validation and overflow handling.
