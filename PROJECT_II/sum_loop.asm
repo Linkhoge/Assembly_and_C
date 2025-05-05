@@ -2,25 +2,29 @@
 ; Title: Sum Loop Program for x86_64
 ; Author: Ariel Fajimiyo
 ; Student Number: C00300811
+; Date: May 05, 2025
 ; Description: Prompts for two numbers, computes their sum, and prints it.
 ;              Runs for 3 iterations, keeping a running sum.
-;              Allows large numbers and overflow wrapping (no validation).
+;              Validates inputs within 64-bit.
 ;-----------------------------------------------------------
 
 section .data
     PROMPT db 'Enter number: ', 0
     RESULT db 'The sum is: ', 0
     FINAL_RESULT db 'Final sum is: ', 0
+    ERROR_MSG db 'Invalid input! Number must be within 64-bit range.', 13, 10, 0
     CRLF db 13, 10, 0
 
 section .bss
-    INPUT_BUFFER resb 128    ; Increased buffer for large numbers
+    INPUT_BUFFER resb 128    ; Buffer for input
     loop_counter resd 1
     running_sum resq 1
     num1 resq 1
-    num2 resq 1              ; Added storage for second number
+    num2 resq 1
+    current_sum resq 1       ; Store the current sum for printing
+    error_flag resd 1        ; Flag for invalid input
     negative_flag resd 1
-    num_buffer resb 128      ; Increased buffer for printing large numbers
+    num_buffer resb 128      ; Buffer for printing numbers
 
 section .text
 global _start
@@ -30,14 +34,14 @@ _start:
     mov dword [loop_counter], 3
 
 game_loop:
-    ; Prompt for first number using sys_write (rax=1, rdi=stdout, rsi=string, rdx=length)
+    ; Prompt for first number
     mov rax, 1
     mov rdi, 1
     mov rsi, PROMPT
     mov rdx, 13
     syscall
 
-    ; Read first number using sys_read (rax=0, rdi=stdin, rsi=buffer, rdx=max chars)
+    ; Read first number
     mov rax, 0
     mov rdi, 0
     mov rsi, INPUT_BUFFER
@@ -45,6 +49,8 @@ game_loop:
     syscall
 
     call string_to_num
+    cmp dword [error_flag], 1
+    je invalid_input
     mov [num1], rax
 
     ; Prompt for second number
@@ -62,11 +68,14 @@ game_loop:
     syscall
 
     call string_to_num
-    mov [num2], rax          ; Store second number
+    cmp dword [error_flag], 1
+    je invalid_input
+    mov [num2], rax
 
-    mov rbx, [num1]          ; Load first number into rbx
-    mov rcx, [num2]          ; Load second number into rcx
-    call register_adder       ; Compute sum (result in rax)
+    mov rbx, [num1]
+    mov rcx, [num2]
+    call register_adder
+    mov [current_sum], rax   ; Store the sum for printing
     add [running_sum], rax   ; Update running sum
 
     ; Print "The sum is: " message
@@ -76,8 +85,8 @@ game_loop:
     mov rdx, 11
     syscall
 
-    ; Print the second number (to match screenshot behavior)
-    mov rax, [num2]
+    ; Print the actual sum
+    mov rax, [current_sum]
     call print_number
     call new_line
 
@@ -95,18 +104,28 @@ game_loop:
     call print_number
     call new_line
 
-    ; Exit program using sys_exit (rax=60, rdi=exit code)
+    ; Exit program
     mov rax, 60
     xor rdi, rdi
     syscall
 
+invalid_input:
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, ERROR_MSG
+    mov rdx, 47
+    syscall
+    jmp game_loop
+
 string_to_num:
-    ; Convert string to number (no validation)
+    ; Convert string to number with 64-bit validation
     xor rax, rax
+    mov dword [error_flag], 0
     mov rsi, INPUT_BUFFER
+    xor rcx, rcx
     mov byte [negative_flag], 0
 
-    ; Check for negative sign at the start
+    ; Check for negative sign
     mov bl, [rsi]
     cmp bl, '-'
     jne positive
@@ -117,30 +136,54 @@ positive:
     xor rax, rax
 
 convert_loop:
-    ; Parse each character to build the number
+    ; Parse each character
     mov bl, [rsi]
     cmp bl, 0
-    je done_convert
+    je check_range
     cmp bl, 10
-    je done_convert
+    je check_range
+    cmp bl, '0'
+    jl invalid
+    cmp bl, '9'
+    jg invalid
+
     sub bl, '0'
-    imul rax, 10              ; Shift left by multiplying by 10
+    imul rax, 10              ; Multiply current value by 10
+    jo invalid                ; Check for overflow during multiplication
     add rax, rbx              ; Add new digit
+    jo invalid                ; Check for overflow during addition
     inc rsi
+    inc rcx
+    cmp rcx, 19               ; Rough check: 64-bit signed max has up to 19 digits
+    jg invalid
     jmp convert_loop
 
-done_convert:
+check_range:
+    ; Validate within 64-bit signed integer range
     cmp byte [negative_flag], 1
-    jne end_convert
-    neg rax                   ; Apply negative sign
+    jne pos_range
+    ; For negative numbers, check against -2^63
+    cmp rax, 0x8000000000000000  ; -2^63
+    ja invalid                   ; If greater than -2^63 (unsigned comparison), invalid
+    neg rax                      ; Apply negative sign
+    jmp done_convert
 
-end_convert:
+pos_range:
+    ; For positive numbers, check against 2^63 - 1
+    cmp rax, 0x7FFFFFFFFFFFFFFF  ; 2^63 - 1
+    ja invalid                   ; If greater than 2^63 - 1, invalid
+
+done_convert:
+    ret
+
+invalid:
+    mov dword [error_flag], 1
     ret
 
 register_adder:
-    ; Add two numbers (no overflow check, allows wrapping)
-    mov rax, rbx              ; First number (from rbx)
-    add rax, rcx              ; Add second number (from rcx)
+    ; Add two numbers (allows wrapping)
+    mov rax, rbx
+    add rax, rcx
     ret
 
 new_line:
@@ -159,12 +202,11 @@ print_number:
     xor rcx, rcx
     cmp rax, 0
     jge convert_digits
-    neg rax                   ; Handle negative numbers
+    neg rax
     mov byte [num_buffer], '-'
     inc rcx
 
 convert_digits:
-    ; Convert each digit by dividing by 10
     xor rdx, rdx
     div rbx
     add dl, '0'
@@ -174,7 +216,6 @@ convert_digits:
     test rax, rax
     jnz convert_digits
 
-    ; Add negative sign if needed
     cmp byte [num_buffer], '-'
     jne print
     dec rsi
