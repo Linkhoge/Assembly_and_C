@@ -2,6 +2,7 @@
 ; Title: Sum Loop Program for x86_64
 ; Description: Prompts for two numbers, computes their sum, and prints it.
 ;              Runs for 3 iterations, keeping a running sum.
+;              Includes input validation and overflow handling.
 ;-----------------------------------------------------------
 
 section .data
@@ -132,14 +133,14 @@ convert_loop:
     add rax, rbx
     inc rsi
     inc rcx
-    cmp rcx, 10
+    cmp rcx, 10                   ; Max 10 digits
     jg invalid
     jmp convert_loop
 
 check_range:
     cmp byte [negative_flag], 1
     jne pos_range
-    cmp rax, 0x80000000           ; -2^31 (keeping 32-bit range for consistency)
+    cmp rax, 0x80000000           ; -2^31
     ja invalid
     neg rax
     jmp done_convert
@@ -158,7 +159,7 @@ invalid:
 register_adder:
     mov rax, rbx                  ; First number
     add rax, rbx                  ; Add second number
-    jo overflow
+    jo overflow                   ; Jump if overflow
     ret
 
 overflow:
@@ -167,7 +168,7 @@ overflow:
     mov rsi, OVERFLOW_MSG
     mov rdx, 28
     syscall
-    xor rax, rax
+    xor rax, rax                  ; Reset to 0 on overflow
     ret
 
 new_line:
