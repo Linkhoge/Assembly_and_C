@@ -152,13 +152,15 @@ convert_loop:
 check_range:
     cmp byte [negative_flag], 1
     jne pos_range
-    cmp rax, 0x80000000           ; -2^31
+    mov rbx, 0x80000000           ; Load -2^31 into rbx
+    cmp rax, rbx                  ; Compare with rax
     ja invalid
     neg rax
     jmp done_convert
 
 pos_range:
-    cmp rax, 0x7FFFFFFF           ; 2^31 - 1
+    mov rbx, 0x7FFFFFFF           ; Load 2^31 - 1 into rbx
+    cmp rax, rbx                  ; Compare with rax
     ja invalid
 
 done_convert:
