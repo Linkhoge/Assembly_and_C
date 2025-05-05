@@ -1,5 +1,7 @@
 ;-----------------------------------------------------------
 ; Title: Sum Loop Functions for x86_64
+; Author: Ariel Fajimiyo
+; Student Number: C00300811
 ; Description: Provides functions for C to test the sum loop logic.
 ;-----------------------------------------------------------
 
